@@ -1,0 +1,69 @@
+Artefakt
+========
+
+Wydobywany z terenu, liczba pierwsza.
+
+Kolekcja
+========
+
+Jest to p artefaktów typu p, ma wartość 10 * p dla p <= A, 0 dla p > A.
+
+
+#####################################################################################
+
+
+Muzeum
+======
+* posiada Teren[D][G]
+* posiada Szacunek[D][G]
+* posiada listę zgromadzonych kolekcji
+* posiada inf pieniędzy
+* wycenia tereny (L, P, G) -> Szacunek[L..P][1..G]
+* wydaje pozwolenia na wydobycie (k, Z)
+	* tworzy delegata obsługującego wydobycie przez k pracowników za cenę Z
+* kupuje kolekcje
+* kończy symulację =>
+	* nie wydaje nowych pozwoleń
+	* każe firmom kończyć
+	* czeka, aż firmy zakończą
+	* generuje raport muzeum
+
+@ wszystkie artefakty (pola?) zostaną wydobyte
+@ wszystkie firmy kończą działalność
+@ SIGINT => kończy symulację
+
+Delegat
+=======
+* akceptuje żądania prac na określonej działce
+* akceptuje raport znalezisk
+
+
+
+#####################################################################################
+
+Bank
+====
+* trzyma stan kont firm
+* pośredniczy w sprzedarzy kolekcji
+	* bank otrzymuje kolekcję i pieniądze od muzeum
+  @ bank otrzyma oba => daje kolekcję muzeum, zmienia saldo firmy
+
+Firma
+=====
+* pyta muzeum o wycenę
+* nabywa od muzeum pozwolenie
+* odbiera artefakty od pracowników
+* sprzedaje kolekcje muzeum za pośrednictwem banku
+
+@ saldo < S & nie ma pozwolenia => zakończ działalność
+@ SIGINT => zakończ działalność
+@ muzeum kończy symulacje =>  zakończ działalność
+@ SIGUSR1 => zawieś działalność
+@ SIGUSR2 => wznów działalność
+
+
+Pracownik
+=========
+* prosi delegata o pozwolenie pracy na swojej działce
+* otrzymawszy symbol zawartości działki pracuje
+* wysyła delegatowi prośbę o akceptację
