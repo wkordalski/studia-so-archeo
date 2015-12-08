@@ -49,15 +49,15 @@ int double_queue_query_err(
     error("Allocation failed.");
     return error_f(error_a);
   }
-  void * answer_buffer = malloc(1024+1);
+  void * answer_buffer = malloc(1024+1 /* bajt notyfikacji */);
   if(answer_buffer == NULL) {
     error("Allocation failed.");
     free(real_query);
     return error_f(error_a);
   }
   memcpy(real_query, &destination, sizeof(long));
-  memcpy(real_query + sizeof(long), &source, sizeof(long));
-  memcpy(real_query + 2 * sizeof(long), query, query_length);
+  memcpy(real_query + sizeof(long), query, query_length);
+  memcpy(real_query + sizeof(long) + query_length, &source, sizeof(long));
   // Send query
   if(msgsnd(q->id1, real_query, query_length + sizeof(long) /* bez pola "rodzaj" */, 0 /* wait if full */) == -1) {
     error("Message sending failed.");
@@ -67,7 +67,7 @@ int double_queue_query_err(
   }
   free(real_query);
   // Wait for result
-  int ret = msgrcv(q->id2, answer_buffer, 1024 /* nie potrzebujemy adresu zwrotnego */, source, 0);
+  int ret = msgrcv(q->id2, answer_buffer, 1024+1 /* nie potrzebujemy adresu zwrotnego */, source, 0);
   if(ret == -1 || ret == 0) {
     error("Message receiving failed.");
     free(answer_buffer);
@@ -89,18 +89,63 @@ int double_queue_query(
 }
 
 // Response - receives result of previous query - because it got notification
-// TODO
+// Query - sends query and waits for result (client side)
+int double_queue_response_err(
+      double_queue_t *q,
+      void ** result, size_t *result_length,
+      int *it_was_notification,
+      long source, long destination /* useless */,
+      void (*error_f)(void*), void *error_a) {
+  // Prepare
+  void * answer_buffer = malloc(1024+1);
+  if(answer_buffer == NULL) {
+    error("Allocation failed.");
+    return error_f(error_a);
+  }
+  // Wait for result
+  int ret = msgrcv(q->id2, answer_buffer, 1024+1 /* nie potrzebujemy adresu zwrotnego */, source, 0);
+  if(ret == -1 || ret == 0) {
+    error("Message receiving failed.");
+    free(answer_buffer);
+    return error_f(error_a);
+  }
+  (*it_was_notification) = (answer_buffer[ret-1] == 0)?0:1;
+  (*result) = answer_buffer;
+  (*result_length) = ret-1;
+  return 0;
+}
+
+int double_queue_response(
+      double_queue_t *q,
+      void ** result, size_t *result_length,
+      int *it_was_notification,
+      long source, long destination) {
+  return double_queue_response_err(q, result, result_length, it_was_notification, source, destination, simple_error, NULL);
+}
 
 // Listen - receives query and sends result (server side)
 int double_queue_listen_err(
       double_queue_t *q,
-      int (*processor)(void * query, size_t query_length,
-                       void ** result, size_t * result_length,
-                       int *is_it_notification, int client),
-      int source,
+      int (*processor)(void *, size_t, void **, size_t *, int *, int),
+      int destination,
       int (*error_f)(void*), void *error_a) {
-  // TODO
-  // Can return notification - eg. when it should cause quiting...
-  // If notification is returned then it is called once again
-  // until it returns normall message.
+  // Prepare buffers
+  void * query = malloc(1024+sizeof(long)  /* message + source */);
+  if(query == NULL) {
+    error("Allocation failed.");
+    return error_f(error_a);
+  }
+  // Receive
+  int ret = msgrcv(q->id1, query, 1024+sizeof(long), destination, 0);
+  if(ret == -1 || ret < sizeof(long)) {
+    error("Message received failed.");
+    free(query);
+  }
+  int source = 0;
+  memcpy(&source, query + ret - sizeof(long));
+  ret -= sizeof(long);
+  // while(is_notification) {
+  // call processor(...)
+  // }
+  // send result
 }
