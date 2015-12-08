@@ -18,6 +18,7 @@ Muzeum
 * posiada Szacunek[D][G]
 * posiada listę zgromadzonych kolekcji
 * posiada inf pieniędzy
+
 * wycenia tereny (L, P, G) -> Szacunek[L..P][1..G]
 * wydaje pozwolenia na wydobycie (k, Z)
 	* tworzy delegata obsługującego wydobycie przez k pracowników za cenę Z

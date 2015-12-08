@@ -1,3 +1,12 @@
+#include "debug.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+
 static int *Teren;
 static int *Szacunek;
 static int OplataStala;
@@ -6,35 +15,48 @@ static int Dlugosc;
 static int Glebokosc;
 static int *Kolekcje;
 
-static key_t key_input = 89756987;
-static int queue_input;
+static key_t key_input = 77;
+static int queue_input = -1;
 
 static key_t key_output = 654165468;
-static int queue_output;
+static int queue_output = -1;
 
 static int * Rezerwacje;
 
 static int *ChceGadac;
 
+void cleanup() {
+  bold("Running cleanup...");
+  if(queue_input >= 0) {
+    msgctl(queue_input, IPC_RMID, NULL);
+    queue_input = -1;
+  }
+  if(queue_output >= 0) {
+    msgctl(queue_output, IPC_RMID, NULL);
+    queue_output = -1;
+  }
+}
+
 int main(int argc, const char *argv[]) {
+  bold("Starting museum process.");
   if(argc != 5) {
-    fprintf(stderr, "Wrong command-line input - four parameters needed.");
+    error("Wrong command-line input - four parameters needed.");
     return 1;
   }
   if(sscanf(argv[1], "%d", &Dlugosc) != 1) {
-    fprintf(stderr, "First parameter should be a number.");
+    error("First parameter should be a number.");
     return 1;
   }
   if(sscanf(argv[2], "%d", &Glebokosc) != 1) {
-    fprintf(stderr, "Second parameter should be a number.");
+    error("Second parameter should be a number.");
     return 1;
   }
   if(sscanf(argv[3], "%d", &OplataStala) != 1) {
-    fprintf(stderr, "Third parameter should be a number.");
+    error("Third parameter should be a number.");
     return 1;
   }
   if(sscanf(argv[4], "%d", &OgraniczenieArtefaktow) != 1) {
-    fprintf(stderr, "Fourth parameter should be a number.");
+    error("Fourth parameter should be a number.");
     return 1;
   } else {
     OgraniczenieArtefaktow++; // bo chcemy większe (>=), a nie ściśle większe (>)
@@ -43,19 +65,23 @@ int main(int argc, const char *argv[]) {
   //
   // Create message queues
   //
-  if((queue_input = msgget(key_input, 0)) == -1) {
-    perror("msgget");
+  log("Creating message queues for museum.");
+
+  if((queue_input = msgget(key_input, 0644 | IPC_CREAT)) == -1) {
+    errorp();
     cleanup();
     return 1;
   }
-  if((queue_output = msgget(key_output, 0)) == -1) {
-    perror("msgget");
+  if((queue_output = msgget(key_output, 0644 | IPC_CREAT)) == -1) {
+    errorp();
     cleanup();
     return 1;
   }
+
   //
   // Read data
   //
+  log("Reading data from stdin");
   if((Teren = malloc(Dlugosc*Glebokosc*sizeof(int))) == NULL) {
     fprintf(stderr, "Allocation failed.");
     cleanup();
@@ -100,6 +126,9 @@ int main(int argc, const char *argv[]) {
   //
   // Słuchaj, kto chce gadać i rozmawiaj...
   //
+  bold("Listening for queries...");
+
+  cleanup();
 }
 
 // L - lewa pozycja
