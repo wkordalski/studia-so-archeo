@@ -3,7 +3,8 @@ CFLAGS+=-std=c99
 all: museum bank
 clean:
 	@rm -f museum
-	@rm -f museum.o
+	@rm -f bank
+	@rm -f ./*.o
 
 museum: museum.o double_queue.o util.o
 bank: bank.o double_queue.o util.o

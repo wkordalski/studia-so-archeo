@@ -12,6 +12,7 @@ static int OgraniczenieArtefaktow;
 static int Dlugosc;
 static int Glebokosc;
 static int *Kolekcje;
+static int LiczbaFirm;
 
 
 static double_queue_t mqueue;
@@ -23,6 +24,28 @@ static int *ChceGadac;
 void cleanup() {
   bold("Running cleanup...");
   double_queue_close(&mqueue);
+}
+
+int czekaj_na_polaczenie_z_bankiem(
+      void *query, size_t query_length,
+      void **response, size_t *response_length,
+      int * is_notification,
+      int source) {
+  if(source != bank_ip) {
+    warning("Wrong sender address: source = %x", source);
+    //return -1;
+  }
+  if(query_length != 1 + sizeof(int) || ((char*)query)[0] != ACT_BANK_CONNECT) {
+    error("Expected BANK CONNECT message: command = %x", ((char*)query)[0]);
+    //return -1;
+  }
+  memcpy(&LiczbaFirm, query + 1, sizeof(int));
+  char *resp = malloc(1);
+  resp[0] = ACT_OK;
+  (*response) = resp;
+  (*response_length) = 1;
+  (*is_notification) = 0;
+  return 0;
 }
 
 int main(int argc, const char *argv[]) {
@@ -60,7 +83,7 @@ int main(int argc, const char *argv[]) {
 		cleanup();
 		return 1;
 	}
-	
+
   //
   // Read data
   //
@@ -109,8 +132,14 @@ int main(int argc, const char *argv[]) {
   //
   // Słuchaj, kto chce gadać i rozmawiaj...
   //
+  bold("Waiting for bank connection...");
+  if(double_queue_listen(&mqueue, czekaj_na_polaczenie_z_bankiem, museum_ip) == -1) {
+    error("Listening error during waiting for bank connection.");
+    cleanup();
+    return 1;
+  }
   bold("Listening for queries...");
-
+  // TODO
   cleanup();
 }
 
