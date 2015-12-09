@@ -2,9 +2,15 @@ typedef int currency;
 typedef int artefakt;
 typedef artefakt kolekcja;
 
-const int museum_action_want_talk = 1;
+#include <sys/types.h>
+#include <sys/ipc.h>
 
-typedef struct {
-  long type;
-  int action;   // must be 1
-} museum_want_talk;
+const key_t key_input = 321654668;
+const key_t key_output = 654165468;
+
+const long museum_ip = 65798468;
+const long bank_ip = 65798469;
+const long delegate_base_ip = 65798470;
+
+const char ACT_OK = 1;
+const char ACT_BANK_CONNECT = 10;

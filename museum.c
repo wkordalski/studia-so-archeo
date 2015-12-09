@@ -1,11 +1,9 @@
+#include "common.h"
 #include "debug.h"
+#include "double_queue.h"
 
 #include <stdio.h>
 #include <stdlib.h>
-
-#include <sys/types.h>
-#include <sys/ipc.h>
-#include <sys/msg.h>
 
 static int *Teren;
 static int *Szacunek;
@@ -15,11 +13,8 @@ static int Dlugosc;
 static int Glebokosc;
 static int *Kolekcje;
 
-static key_t key_input = 77;
-static int queue_input = -1;
 
-static key_t key_output = 654165468;
-static int queue_output = -1;
+static double_queue_t mqueue;
 
 static int * Rezerwacje;
 
@@ -27,14 +22,7 @@ static int *ChceGadac;
 
 void cleanup() {
   bold("Running cleanup...");
-  if(queue_input >= 0) {
-    msgctl(queue_input, IPC_RMID, NULL);
-    queue_input = -1;
-  }
-  if(queue_output >= 0) {
-    msgctl(queue_output, IPC_RMID, NULL);
-    queue_output = -1;
-  }
+  double_queue_close(&mqueue);
 }
 
 int main(int argc, const char *argv[]) {
@@ -67,17 +55,12 @@ int main(int argc, const char *argv[]) {
   //
   log("Creating message queues for museum.");
 
-  if((queue_input = msgget(key_input, 0644 | IPC_CREAT)) == -1) {
-    errorp();
-    cleanup();
-    return 1;
-  }
-  if((queue_output = msgget(key_output, 0644 | IPC_CREAT)) == -1) {
-    errorp();
-    cleanup();
-    return 1;
-  }
-
+	if(double_queue_init(&mqueue, key_input, key_output, 0700|IPC_CREAT, 0700|IPC_CREAT) == -1) {
+		error("Failed creating message queue.");
+		cleanup();
+		return 1;
+	}
+	
   //
   // Read data
   //
