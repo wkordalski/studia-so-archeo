@@ -44,7 +44,6 @@ int double_queue_query_err(
       int *it_was_notification,
       long source, long destination,
       int (*error_f)(void*), void *error_a) {
-  log("Sending message from %x to %x of length %d", source, destination, query_length);
   // Parameter checks
   if(query_length > 1024 /* maksymalna długość komunikatu */) {
     error("Too long message.");
@@ -56,18 +55,16 @@ int double_queue_query_err(
     error("Allocation failed.");
     return error_f(error_a);
   }
-  char * answer_buffer = malloc(1024+1 /* bajt notyfikacji */);
+  char * answer_buffer = malloc(1024+1+sizeof(long) /* bajt notyfikacji */);
   if(answer_buffer == NULL) {
     error("Allocation failed.");
     free(real_query);
     return error_f(error_a);
   }
-  log("Query length = %d", query_length);
   memcpy(real_query, &destination, sizeof(long));
   memcpy(real_query + sizeof(long), query, query_length);
   memcpy(real_query + sizeof(long) + query_length, &source, sizeof(long));
   // Send query
-  log("Sending %d bytes of data", query_length + sizeof(long));
   if(msgsnd(q->id1, real_query, query_length + sizeof(long) /* bez pola "rodzaj" */, 0 /* wait if full */) == -1) {
     error("Message sending failed.");
     free(real_query);
@@ -76,15 +73,12 @@ int double_queue_query_err(
   }
   free(real_query);
   // Wait for result
-  int ret = msgrcv(q->id2, answer_buffer, 1024+1 /* nie potrzebujemy adresu zwrotnego */, source, 0);
+  int ret = msgrcv(q->id2, answer_buffer, 1024+1+sizeof(long) /* nie potrzebujemy adresu zwrotnego */, source, 0);
   if(ret == -1 || ret == 0) {
     error("Message receiving failed.");
     free(answer_buffer);
     return error_f(error_a);
   }
-  (*it_was_notification) = (answer_buffer[sizeof(long)+ret-1] == 0)?0:1;
-  (*result) = answer_buffer;
-  (*result_length) = ret-1;
   char * res = malloc(ret - 1);
   if(res == NULL) {
     error("Allocation failed.");
@@ -92,6 +86,9 @@ int double_queue_query_err(
     return error_f(error_a);
   }
   memcpy(res, answer_buffer+sizeof(long), ret - 1);
+  (*it_was_notification) = (answer_buffer[sizeof(long)+ret-1] == 0)?0:1;
+  (*result) = res;
+  (*result_length) = ret-1;
   free(answer_buffer);
   return 0;
 }
@@ -114,21 +111,29 @@ int double_queue_response_err(
       long source, long destination /* useless */,
       int (*error_f)(void*), void *error_a) {
   // Prepare
-  char * answer_buffer = malloc(1024+1);
+  char * answer_buffer = malloc(1024+1+sizeof(long));
   if(answer_buffer == NULL) {
     error("Allocation failed.");
     return error_f(error_a);
   }
   // Wait for result
-  int ret = msgrcv(q->id2, answer_buffer, 1024+1 /* nie potrzebujemy adresu zwrotnego */, source, 0);
+  int ret = msgrcv(q->id2, answer_buffer, 1024+1+sizeof(long) /* nie potrzebujemy adresu zwrotnego */, source, 0);
   if(ret == -1 || ret == 0) {
     error("Message receiving failed.");
     free(answer_buffer);
     return error_f(error_a);
   }
-  (*it_was_notification) = (answer_buffer[ret-1] == 0)?0:1;
-  (*result) = answer_buffer;
+  char * res = malloc(ret - 1);
+  if(res == NULL) {
+    error("Allocation failed.");
+    free(answer_buffer);
+    return error_f(error_a);
+  }
+  memcpy(res, answer_buffer+sizeof(long), ret - 1);
+  (*it_was_notification) = (answer_buffer[sizeof(long)+ret-1] == 0)?0:1;
+  (*result) = res;
   (*result_length) = ret-1;
+  free(answer_buffer);
   return 0;
 }
 
@@ -147,13 +152,13 @@ int double_queue_listen_err(
       int destination,
       int (*error_f)(void*), void *error_a) {
   // Prepare buffers
-  void * query = malloc(1024+sizeof(long)  /* message + source */);
+  void * query = malloc(1024+2*sizeof(long)  /* message + source */);
   if(query == NULL) {
     error("Allocation failed.");
     return error_f(error_a);
   }
   // Receive
-  int ret = msgrcv(q->id1, query, 1024+sizeof(long), destination, 0);
+  int ret = msgrcv(q->id1, query, 1024+2*sizeof(long), destination, 0);
   if(ret == -1 || ret < sizeof(long)) {
     error("Message received failed.");
     free(query);
@@ -162,7 +167,6 @@ int double_queue_listen_err(
   long source = 0;
   ret -= sizeof(long);
   memcpy(&source, query + ret + sizeof(long), sizeof(long));
-  log("Now ret = %d and source = %x", ret, source);
 	int is_notification = 0;
 	do {
 		void *response = NULL;

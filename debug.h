@@ -7,7 +7,8 @@
   #include <string.h>
   #include <unistd.h>
   #include <sys/types.h>
-  #define print_debug_message(lvl, col, crt, s, args...) fprintf(stderr, "[%s]  %5d\t( %-16s : %4d ):    " col "" s "" crt "\n", lvl, getpid(), __FILE__, __LINE__, ## args)
+  #include <pthread.h>
+  #define print_debug_message(lvl, col, crt, s, args...) fprintf(stderr, "[%s]  %5d\t( %-16s : %4d ):    " col "" s "" crt "\n", lvl, pthread_self() % 10000, __FILE__, __LINE__, ## args)
   #define errorp() print_debug_message("\x1b[31m EE \x1b[0m", "", "", "%s", strerror(errno))
 #else
   #define print_debug_message(lvl, col, crt, s, args...) do {} while(0)

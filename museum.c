@@ -16,6 +16,10 @@ static int LiczbaFirm;
 
 
 static double_queue_t mqueue;
+static double_queue_t *mQ = &mqueue;
+
+static double_queue_t bqueue;
+static double_queue_t *bQ = &bqueue;
 
 static int * Rezerwacje;
 
@@ -23,29 +27,14 @@ static int *ChceGadac;
 
 void cleanup() {
   bold("Running cleanup...");
-  double_queue_close(&mqueue);
-}
 
-int czekaj_na_polaczenie_z_bankiem(
-      void *query, size_t query_length,
-      void **response, size_t *response_length,
-      int * is_notification,
-      int source) {
-  if(source != bank_ip) {
-    warning("Wrong sender address: source = %x", source);
-    //return -1;
-  }
-  if(query_length != 1 + sizeof(int) || ((char*)query)[0] != ACT_BANK_CONNECT) {
-    error("Expected BANK CONNECT message: command = %x", ((char*)query)[0]);
-    //return -1;
-  }
-  memcpy(&LiczbaFirm, query + 1, sizeof(int));
-  char *resp = malloc(1);
-  resp[0] = ACT_OK;
-  (*response) = resp;
-  (*response_length) = 1;
-  (*is_notification) = 0;
-  return 0;
+  log("Closing message queues.");
+  double_queue_close(mQ);
+
+  log("Freeing memory.");
+  free(Teren);
+  free(Szacunek);
+  free(Kolekcje);
 }
 
 int main(int argc, const char *argv[]) {
@@ -76,9 +65,17 @@ int main(int argc, const char *argv[]) {
   //
   // Create message queues
   //
-  log("Creating message queues for museum.");
+  log("Creating museum message queue.");
 
-	if(double_queue_init(&mqueue, key_input, key_output, 0700|IPC_CREAT, 0700|IPC_CREAT) == -1) {
+	if(double_queue_init(mQ, museum_key1, museum_key2, 0700|IPC_CREAT, 0700|IPC_CREAT) == -1) {
+		error("Failed creating message queue.");
+		cleanup();
+		return 1;
+	}
+
+  log("Creating bank message queue.");
+
+  if(double_queue_init(bQ, bank_key1, bank_key2, 0700|IPC_CREAT, 0700|IPC_CREAT) == -1) {
 		error("Failed creating message queue.");
 		cleanup();
 		return 1;
@@ -88,56 +85,76 @@ int main(int argc, const char *argv[]) {
   // Read data
   //
   log("Reading data from stdin");
-  if((Teren = malloc(Dlugosc*Glebokosc*sizeof(int))) == NULL) {
-    fprintf(stderr, "Allocation failed.");
-    cleanup();
-    return 1;
-  }
-  if((Szacunek = malloc(Dlugosc*Glebokosc*sizeof(int))) == NULL) {
-    fprintf(stderr, "Allocation failed.");
-    cleanup();
-    return 1;
-  }
-  if((Kolekcje = malloc(OgraniczenieArtefaktow*sizeof(int))) == NULL) {
-    fprintf(stderr, "Allocation failed.");
-    cleanup();
-    return 1;
-  } else {
-    for(int i = 0; i < OgraniczenieArtefaktow; i++) {
-      Kolekcje[i] = 0;
+  {
+    if((Teren = malloc(Dlugosc*Glebokosc*sizeof(int))) == NULL) {
+      fprintf(stderr, "Allocation failed.");
+      cleanup();
+      return 1;
     }
-  }
-  if((Rezerwacje = malloc(Dlugosc*sizeof(int))) == NULL) {
-    fprintf(stderr, "Allocation failed.");
-    cleanup();
-    return 1;
-  } else {
+    if((Szacunek = malloc(Dlugosc*Glebokosc*sizeof(int))) == NULL) {
+      fprintf(stderr, "Allocation failed.");
+      cleanup();
+      return 1;
+    }
+    if((Kolekcje = malloc(OgraniczenieArtefaktow*sizeof(int))) == NULL) {
+      fprintf(stderr, "Allocation failed.");
+      cleanup();
+      return 1;
+    } else {
+      for(int i = 0; i < OgraniczenieArtefaktow; i++) {
+        Kolekcje[i] = 0;
+      }
+    }
+    if((Rezerwacje = malloc(Dlugosc*sizeof(int))) == NULL) {
+      fprintf(stderr, "Allocation failed.");
+      cleanup();
+      return 1;
+    } else {
+      for(int i = 0; i < Dlugosc; i++) {
+        Rezerwacje[i] = 0;
+      }
+    }
+
     for(int i = 0; i < Dlugosc; i++) {
-      Rezerwacje[i] = 0;
+      for(int j = 0; j < Glebokosc; j++) {
+        scanf("%d", Teren+i*Glebokosc+j);
+      }
+    }
+
+    for(int i = 0; i < Dlugosc; i++) {
+      for(int j = 0; j < Glebokosc; j++) {
+        scanf("%d", Szacunek+i*Glebokosc+j);
+      }
     }
   }
-
-  for(int i = 0; i < Dlugosc; i++) {
-    for(int j = 0; j < Glebokosc; j++) {
-      scanf("%d", Teren+i*Glebokosc+j);
-    }
-  }
-
-  for(int i = 0; i < Dlugosc; i++) {
-    for(int j = 0; j < Glebokosc; j++) {
-      scanf("%d", Szacunek+i*Glebokosc+j);
-    }
-  }
-
   //
   // Słuchaj, kto chce gadać i rozmawiaj...
   //
-  bold("Waiting for bank connection...");
-  if(double_queue_listen(&mqueue, czekaj_na_polaczenie_z_bankiem, museum_ip) == -1) {
-    error("Listening error during waiting for bank connection.");
-    cleanup();
-    return 1;
-  }
+  bold("Connecting to bank...");
+  {
+		char connect_msg[1];
+		connect_msg[0] = ACT_BANK_WITH_MUSEUM_CONNECT_REQUEST;
+		char *response;
+		size_t response_size;
+		int is_notification;
+		if(double_queue_query(bQ, connect_msg, 1, (void**)(&response), &response_size, &is_notification, museum_ip, bank_ip) == -1) {
+			error("Error connecting to bank.");
+			cleanup();
+			return 1;
+		}
+		if(is_notification) {
+			error("Expected OK message, not a notification.");
+			cleanup();
+			return 1;
+		}
+		if(response_size != 1 + sizeof(int) && response[0] != ACT_OK) {
+			error("Expected OK message - something went wrong.");
+			cleanup();
+			return 1;
+		}
+    memcpy(&LiczbaFirm, response + 1, sizeof(int));
+    free(response);
+	}
   bold("Listening for queries...");
   // TODO
   cleanup();
