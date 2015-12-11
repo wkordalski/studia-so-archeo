@@ -1,3 +1,6 @@
+#ifndef _ARCHEO_DOUBLE_QUEUE_H_
+#define _ARCHEO_DOUBLE_QUEUE_H_
+
 #include <sys/types.h>
 #include <sys/ipc.h>
 
@@ -53,3 +56,6 @@ int double_queue_listen(
 			double_queue_t *q,
 			int (*server)(void*, size_t, void **, size_t*, int *, int),
 			int destination);
+
+
+#endif /* end of include guard: _ARCHEO_DOUBLE_QUEUE_H_ */

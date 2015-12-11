@@ -171,6 +171,7 @@ int double_queue_listen_err(
 	do {
 		void *response = NULL;
 		size_t response_length;
+    is_notification = 0;
 		if(server(query+sizeof(long), ret, &response, &response_length, &is_notification, source) == -1) {
 			error("Server procedure failed.");
 			free(query);

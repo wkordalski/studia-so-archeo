@@ -8,7 +8,9 @@
   #include <unistd.h>
   #include <sys/types.h>
   #include <pthread.h>
-  #define print_debug_message(lvl, col, crt, s, args...) fprintf(stderr, "[%s]  %5d\t( %-16s : %4d ):    " col "" s "" crt "\n", lvl, pthread_self() % 10000, __FILE__, __LINE__, ## args)
+  #include <string.h>
+  #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+  #define print_debug_message(lvl, col, crt, s, args...) fprintf(stderr, "[%s]  %5d\t( %-16s : %4d ):    " col "" s "" crt "\n", lvl, pthread_self() % 10000, __FILENAME__, __LINE__, ## args)
   #define errorp() print_debug_message("\x1b[31m EE \x1b[0m", "", "", "%s", strerror(errno))
 #else
   #define print_debug_message(lvl, col, crt, s, args...) do {} while(0)

@@ -15,15 +15,20 @@ static int OplataStala;
 static double_queue_t bqueue;
 static double_queue_t *bQ = &bqueue;
 
+static double_queue_t cqueue;   // Queue for companies
+static double_queue_t *cQ = &cqueue;
+
 
 
 typedef struct {
   int id;
-  int saldo;
+  long long int saldo;
 } konto_t;
 
 static konto_t *Konta;
 static pthread_t *Firmy;
+
+static int do_exit = 0;
 
 void cleanup() {
 	bold("Running cleanup...");
@@ -63,8 +68,51 @@ int wait_for_museum_connection(
   memcpy(resp + 1, &LiczbaFirm, sizeof(int));
   (*response) = resp;
   (*response_length) = 5;
-  (*is_notification) = 0;
   return 0;
+}
+
+int server(
+      void *query, size_t query_length,
+      void **response, size_t *response_length,
+      int * is_notification,
+      int source) {
+  if(query_length <= 0) {
+    error("Empty message - something went wrong.");
+    return -1;
+  }
+  char cmd = ((char*)query)[0];
+  if(cmd == ACT_BANK_GET_SALDO) {
+    if(query_length != 1 + sizeof(int) * 2) {
+      error("Wrong message length.");
+      return -1;
+    }
+    int idx;
+    int id;
+    memcpy(&idx, query + 1, sizeof(int));
+    memcpy(&id, query + 1 + sizeof(int), sizeof(int));
+    if(idx >= LiczbaFirm || Konta[idx].id != id) {
+      warning("Wrong data for get saldo command - access denied - %d %d.", idx, id);
+      //print_hexadecimal()
+      char *resp = malloc(2);
+      resp[0] = ACT_ERROR;
+      resp[1] = ERR_ACCESS_DENIED;
+      (*response) = resp;
+      (*response_length) = 2;
+      return 0;
+    }
+    else {
+      char *resp = malloc(1 + sizeof(long long int));
+      resp[0] = ACT_OK;
+      memcpy(resp + 1, &(Konta[idx].saldo), sizeof(long long int));
+      (*response) = resp;
+      (*response_length) = 1+sizeof(long long int);
+      return 0;
+    }
+  }
+  else {
+    error("Unsupported command.");
+    return -1;
+  }
 }
 
 int main(int argc, const char *argv[]) {
@@ -90,10 +138,15 @@ int main(int argc, const char *argv[]) {
   //
   // Create message queues
   //
-  log("Creating message queues for bank.");
+  log("Creating message queues for bank and companies.");
   {
   	if(double_queue_init(bQ, bank_key1, bank_key2, 0700|IPC_CREAT, 0700|IPC_CREAT) == -1) {
   		error("Failed creating message queue.");
+  		cleanup();
+  		return 1;
+  	}
+    if(double_queue_init(cQ, company_key1, company_key2, 0700|IPC_CREAT, 0700|IPC_CREAT) == -1) {
+      error("Failed creating message queue.");
   		cleanup();
   		return 1;
   	}
@@ -123,6 +176,7 @@ int main(int argc, const char *argv[]) {
     }
     pthread_attr_t attrs;
     pthread_attr_init(&attrs);
+    int worker_base = 3 + LiczbaFirm;
     for(int i = 0; i < LiczbaFirm; i++) {
       company_init_t *cidata = malloc(sizeof(company_init_t));
       if(cidata == NULL) {
@@ -134,6 +188,9 @@ int main(int argc, const char *argv[]) {
       scanf("%d %d %d", &(cidata->id), &(Konta[i].saldo), &(cidata->k));
       Konta[i].id = cidata->id;
       cidata->idx = i;
+      cidata->ip = 3 + i;
+      cidata->wip = worker_base;
+      worker_base += cidata->k;
       // we can now start new thread
       int ret = pthread_create(Firmy+i, &attrs, company, cidata);
       if(ret != 0) {
@@ -146,7 +203,13 @@ int main(int argc, const char *argv[]) {
     pthread_attr_destroy(&attrs);
   }
 
-  // TODO
+  while(!do_exit) {
+    if(double_queue_listen(bQ, server, bank_ip) == -1) {
+      error("Error during listening for queries.");
+      cleanup();
+      return 1;
+    }
+  }
   cleanup();
   return 0;
 }
