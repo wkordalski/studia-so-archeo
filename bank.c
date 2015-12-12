@@ -59,7 +59,7 @@ int wait_for_museum_connection(
     error("Wrong sender address (waiting from connection from museum).");
     return -1;
   }
-  if(query_length != 1 || ((char*)query)[0] != ACT_BANK_WITH_MUSEUM_CONNECT_REQUEST) {
+  if(match(query, query_length, "@c", ACT_BANK_WITH_MUSEUM_CONNECT_REQUEST) != 0) {
     error("Expected BANK WITH MUSEUM CONNECT REQUEST message.");
     return -1;
   }
@@ -79,23 +79,21 @@ int server(
   }
   char cmd = ((char*)query)[0];
   if(cmd == ACT_BANK_GET_SALDO) {
-    if(query_length != 1 + sizeof(int) * 2) {
-      error("Wrong message length.");
-      return -1;
-    }
     int idx;
     int id;
-    memcpy(&idx, query + 1, sizeof(int));
-    memcpy(&id, query + 1 + sizeof(int), sizeof(int));
-    if(idx >= LiczbaFirm || Konta[idx].id != id) {
-      warning("Wrong data for get saldo command - access denied - %d %d.", idx, id);
-      //print_hexadecimal()
-      combine(response, response_length, "%c %c", ACT_ERROR, ERR_ACCESS_DENIED);
-      return 0;
-    }
-    else {
-      combine(response, response_length, "%c %ll", ACT_OK, Konta[idx].saldo);
-      return 0;
+    if(match(query, query_length, "@c %i %i", ACT_BANK_GET_SALDO, &idx, &id) == 0) {
+      if(idx >= LiczbaFirm || Konta[idx].id != id) {
+        warning("Wrong data for get saldo command - access denied - %d %d.", idx, id);
+        combine(response, response_length, "%c %c", ACT_ERROR, ERR_ACCESS_DENIED);
+        return 0;
+      }
+      else {
+        combine(response, response_length, "%c %ll", ACT_OK, Konta[idx].saldo);
+        return 0;
+      }
+    } else {
+      error("Wrong message.");
+      return -1;
     }
   }
   else {

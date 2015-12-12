@@ -127,13 +127,12 @@ void* company(void *arg) {
       return NULL;
     }
     free(query);
-    if(resplen != 1 + sizeof(long long int) || response[0] != ACT_OK) {
+    if(match(response, resplen, "@c %ll", ACT_OK, &saldo) != 0) {
       error("Wrong response - maby some error.");
       free(response);
       cleanup_company(global);
       return NULL;
     }
-    memcpy(&saldo, response + 1, sizeof(long long int));
     free(response);
   }
   log("We have %lld units of gold.", saldo);
