@@ -2,6 +2,7 @@
 #include "debug.h"
 #include "double_queue.h"
 #include "company.h"
+#include "util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,11 +64,7 @@ int wait_for_museum_connection(
     return -1;
   }
 
-  char *resp = malloc(5);
-  resp[0] = ACT_OK;
-  memcpy(resp + 1, &LiczbaFirm, sizeof(int));
-  (*response) = resp;
-  (*response_length) = 5;
+  combine(response, response_length, "%c %i", ACT_OK, LiczbaFirm);
   return 0;
 }
 
@@ -93,19 +90,11 @@ int server(
     if(idx >= LiczbaFirm || Konta[idx].id != id) {
       warning("Wrong data for get saldo command - access denied - %d %d.", idx, id);
       //print_hexadecimal()
-      char *resp = malloc(2);
-      resp[0] = ACT_ERROR;
-      resp[1] = ERR_ACCESS_DENIED;
-      (*response) = resp;
-      (*response_length) = 2;
+      combine(response, response_length, "%c %c", ACT_ERROR, ERR_ACCESS_DENIED);
       return 0;
     }
     else {
-      char *resp = malloc(1 + sizeof(long long int));
-      resp[0] = ACT_OK;
-      memcpy(resp + 1, &(Konta[idx].saldo), sizeof(long long int));
-      (*response) = resp;
-      (*response_length) = 1+sizeof(long long int);
+      combine(response, response_length, "%c %ll", ACT_OK, Konta[idx].saldo);
       return 0;
     }
   }

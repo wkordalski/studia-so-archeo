@@ -4,6 +4,7 @@
 #include "debug.h"
 #include "double_queue.h"
 #include "worker.h"
+#include "util.h"
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -113,18 +114,19 @@ void* company(void *arg) {
   log("Asking for current saldo.");
   long long int saldo;
   {
-    char query[1 + 2 * sizeof(int)];
-    query[0] = ACT_BANK_GET_SALDO;
-    memcpy(query + 1, &(global->idx), sizeof(int));
-    memcpy(query + 1 + sizeof(int), &(global->id), sizeof(int));
+    void *query;
+    size_t qlen;
+    combine(&query, &qlen, "%c %i %i", ACT_BANK_GET_SALDO, global->idx, global->id);
     char *response;
     size_t resplen;
     int is_notification;
-    if(double_queue_query(global->bQ, query, 1 + 2 * sizeof(int), (void**)&response, &resplen, &is_notification, global->ip, bank_ip) == -1) {
+    if(double_queue_query(global->bQ, query, qlen, (void**)&response, &resplen, &is_notification, global->ip, bank_ip) == -1) {
       error("Failed sending query to bank.");
+      free(query);
       cleanup_company(global);
       return NULL;
     }
+    free(query);
     if(resplen != 1 + sizeof(long long int) || response[0] != ACT_OK) {
       error("Wrong response - maby some error.");
       free(response);
