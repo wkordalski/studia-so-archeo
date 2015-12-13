@@ -72,7 +72,6 @@ Pracownik
 
 #####################################################################################
 
-Bank -> Muzeum (tylko raz na początku)		// Zmienić na odwrotną relację, by nie było cyklu
 --- Nie zakleszczy się, bo nie ma spełnionego warunku cykliczności :D
 Muzeum -> Bank
 
@@ -81,6 +80,6 @@ Firma -> Muzeum
 Firma -> Delegat
 
 Pracownik -> Delegat
-Pracownik -> Firma
+Pracownik -> Firma (mówi, że zdobył takie artefakty i chce delegata lub też prosi o czekanie na nowego delegata)
 
 Delegat -> Muzeum

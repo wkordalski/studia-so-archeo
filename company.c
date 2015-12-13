@@ -119,8 +119,7 @@ void* company(void *arg) {
     combine(&query, &qlen, "%c %i %i", ACT_BANK_GET_SALDO, global->idx, global->id);
     char *response;
     size_t resplen;
-    int is_notification;
-    if(double_queue_query(global->bQ, query, qlen, (void**)&response, &resplen, &is_notification, global->ip, bank_ip) == -1) {
+    if(double_queue_query(global->bQ, query, qlen, (void**)&response, &resplen, &skip_notifications, NULL, global->ip, bank_ip) == -1) {
       error("Failed sending query to bank.");
       free(query);
       cleanup_company(global);

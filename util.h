@@ -4,6 +4,7 @@
 #include <stddef.h>
 
 int simple_error(void *);
+int skip_notifications(void *, size_t, void*);
 void print_hexadecimal(char *s, int l);
 
 int match(void *buff, size_t length, char *format, ...);

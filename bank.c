@@ -54,7 +54,7 @@ int wait_for_museum_connection(
       void *query, size_t query_length,
       void **response, size_t *response_length,
       int * is_notification,
-      int source) {
+      int source, void *arg) {
   if(source != museum_ip) {
     error("Wrong sender address (waiting from connection from museum).");
     return -1;
@@ -72,7 +72,7 @@ int server(
       void *query, size_t query_length,
       void **response, size_t *response_length,
       int * is_notification,
-      int source) {
+      int source, void *arg) {
   if(query_length <= 0) {
     error("Empty message - something went wrong.");
     return -1;
@@ -141,7 +141,7 @@ int main(int argc, const char *argv[]) {
 
   bold("Waiting for museum connection request...");
   {
-    if(double_queue_listen(bQ, wait_for_museum_connection, bank_ip) == -1) {
+    if(double_queue_listen(bQ, wait_for_museum_connection, NULL, bank_ip) == -1) {
       error("Listening error during waiting for museum connection request.");
       cleanup();
       return 1;
@@ -191,7 +191,7 @@ int main(int argc, const char *argv[]) {
   }
 
   while(!do_exit) {
-    if(double_queue_listen(bQ, server, bank_ip) == -1) {
+    if(double_queue_listen(bQ, server, NULL, bank_ip) == -1) {
       error("Error during listening for queries.");
       cleanup();
       return 1;

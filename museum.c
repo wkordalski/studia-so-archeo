@@ -1,6 +1,7 @@
 #include "common.h"
 #include "debug.h"
 #include "double_queue.h"
+#include "util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -133,29 +134,22 @@ int main(int argc, const char *argv[]) {
   bold("Connecting to bank...");
   {
 		void *query;
-    size_t *qlen;
+    size_t qlen;
     combine(&query, &qlen, "%c", ACT_BANK_WITH_MUSEUM_CONNECT_REQUEST);
 		char *response;
 		size_t response_size;
-		int is_notification;
-		if(double_queue_query(bQ, query, qlen, (void**)(&response), &response_size, &is_notification, museum_ip, bank_ip) == -1) {
+		if(double_queue_query(bQ, query, qlen, (void**)(&response), &response_size, &skip_notifications, NULL, museum_ip, bank_ip) == -1) {
 			error("Error connecting to bank.");
       free(query);
 			cleanup();
 			return 1;
 		}
     free(query);
-		if(is_notification) {
-			error("Expected OK message, not a notification.");
-			cleanup();
-			return 1;
-		}
-		if(response_size != 1 + sizeof(int) && response[0] != ACT_OK) {
+		if(match(response, response_size, "@c %i", ACT_OK, &LiczbaFirm) != 0) {
 			error("Expected OK message - something went wrong.");
 			cleanup();
 			return 1;
 		}
-    memcpy(&LiczbaFirm, response + 1, sizeof(int));
     free(response);
 	}
   bold("Listening for queries...");
