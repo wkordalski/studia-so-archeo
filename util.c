@@ -38,8 +38,6 @@ void print_hexadecimal(char *s, int l) {
  *  bv - variable length binary (writes length)
  */
 
-static char buffer[1<<20];
-
 static int is_format_start_command_character(char c) {
   if(c == '%') return 1;
   if(c == '@') return 1;
@@ -128,10 +126,10 @@ static int count_args(char *s) {
   return count;
 }
 
-int match(void *buff, size_t length, char *format, ...) {
+int match(void *buffer, size_t length, char *format, ...) {
   va_list ap;
   char *s = format;
-  char *w = buff;
+  char *w = buffer;
   char type;
   char *arg, *opt;
   int  argl, optl;
@@ -243,10 +241,26 @@ fail:
   return -1;
 }
 
-int combine(void **buff, size_t *len, char *format, ...) {
+static int reserve_in_buffer(void **buffer, char **top, size_t *capacity, size_t needed) {
+  void **w = (void**)top;
+  if((*w - *buffer) + needed >= *capacity) {
+    while((*w - *buffer) + needed >= *capacity) *capacity *= 2;
+    void *new_buff = realloc(*buffer, *capacity);
+    if(new_buff == NULL) {
+      error("Allocation failed.");
+      return -1;
+    }
+    *w = new_buff + (*w - *buffer);
+    *buffer = new_buff;
+  }
+  return 0;
+}
+
+int combine(void **buffer, size_t *len, char *format, ...) {
   va_list ap;
   char *s = format;
-  char *w = buffer;
+  char *w = *buffer = malloc(64);
+  size_t buffer_capacity = 64;
   char type;
   char *arg, *opt;
   int  argl, optl;
@@ -259,30 +273,45 @@ int combine(void **buff, size_t *len, char *format, ...) {
       if(strncmp("c", arg, argl) == 0) {
         // write charater
         if(optl > 0) goto fail;
+        if(reserve_in_buffer(buffer, &w, &buffer_capacity, 1) == -1) {
+          return -1;
+        }
         char ar = va_arg(ap, int);
         *w = ar;
         w++;
       } else if(strncmp("h", arg, argl) == 0) {
         // write short
         if(optl > 0) goto fail;
+        if(reserve_in_buffer(buffer, &w, &buffer_capacity, sizeof(short)) == -1) {
+          return -1;
+        }
         short ar = va_arg(ap, int);
         memcpy(w, &ar, sizeof(short));
         w += sizeof(short);
       } else if(strncmp("i", arg, argl) == 0) {
         // write int
         if(optl > 0) goto fail;
+        if(reserve_in_buffer(buffer, &w, &buffer_capacity, sizeof(int)) == -1) {
+          return -1;
+        }
         int ar = va_arg(ap, int);
         memcpy(w, &ar, sizeof(int));
         w += sizeof(int);
       } else if(strncmp("l", arg, argl) == 0) {
         // write long
         if(optl > 0) goto fail;
+        if(reserve_in_buffer(buffer, &w, &buffer_capacity, sizeof(long)) == -1) {
+          return -1;
+        }
         long ar = va_arg(ap, long);
         memcpy(w, &ar, sizeof(long));
         w += sizeof(long);
       } else if(strncmp("ll", arg, argl) == 0) {
         // write long long
         if(optl > 0) goto fail;
+        if(reserve_in_buffer(buffer, &w, &buffer_capacity, sizeof(long long)) == -1) {
+          return -1;
+        }
         long long ar = va_arg(ap, long long);
         memcpy(w, &ar, sizeof(long long));
         w += sizeof(long long);
@@ -291,6 +320,9 @@ int combine(void **buff, size_t *len, char *format, ...) {
         if(optl > 0) goto fail;
         void* ar = va_arg(ap, void*);
         int br = va_arg(ap, int);
+        if(reserve_in_buffer(buffer, &w, &buffer_capacity, br) == -1) {
+          return -1;
+        }
         memcpy(w, ar, br);
         w += br;
       } else if(strncmp("bv", arg, argl) == 0) {
@@ -298,6 +330,9 @@ int combine(void **buff, size_t *len, char *format, ...) {
         if(optl > 0) goto fail;
         void* ar = va_arg(ap, void*);
         int br = va_arg(ap, int);
+        if(reserve_in_buffer(buffer, &w, &buffer_capacity, sizeof(int) + br) == -1) {
+          return -1;
+        }
         memcpy(w, &br, sizeof(int));
         w += sizeof(int);
         memcpy(w, ar, br);
@@ -307,6 +342,9 @@ int combine(void **buff, size_t *len, char *format, ...) {
       }
     } else if(type == '$') {
       // write constant
+      if(reserve_in_buffer(buffer, &w, &buffer_capacity, argl) == -1) {
+        return -1;
+      }
       memcpy(w, arg, argl);
       w += argl;
     } else {
@@ -315,14 +353,7 @@ int combine(void **buff, size_t *len, char *format, ...) {
   }
   if(ret == -1) goto fail;
 
-  void * bfer = malloc(w - buffer);
-  if(bfer == NULL) {
-    error("Allocation failed.");
-    return -1;
-  }
-  memcpy(bfer, buffer, w - buffer);
-  *buff = bfer;
-  *len = (w - buffer);
+  *len = (((void*)w) - *buffer);
   return 0;
 
 fail:
