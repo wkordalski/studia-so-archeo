@@ -22,6 +22,14 @@ int double_queue_init_err(double_queue_t *q, key_t key1, key_t key2, int flags1,
     error("Creation of message queue failed.");
     return error_f(error_a);
   }
+  q->conds_count = 0;
+  q->conds_capa = 1;
+  q->conds = malloc(sizeof(condition_queue_info_t));
+  if(q->conds == NULL) {
+    error("Allocation failed.");
+    q->conds_capa = 0;
+    return error_f(error_a);
+  }
   return 0;
 }
 
@@ -35,6 +43,9 @@ void double_queue_close(double_queue_t *q) {
   }
   if(q->id2 >= 0) {
     if(msgctl(q->id2, IPC_RMID, NULL) == -1) warning("Closing of message queue (direction S->C) failed.");
+  }
+  if(q->conds != NULL) {
+    free(q->conds);
   }
 }
 
