@@ -28,7 +28,7 @@ int double_queue_query_err(
       void * query, size_t query_length,
       void ** result, size_t *result_length,
       int (*on_notification)(void*, size_t, void*),
-      void *arg,
+      void *arg, int *exit_after_signal,
       long source, long destination,
       int (*error_f)(void*), void *error_a);
 
@@ -37,7 +37,7 @@ int double_queue_query(
       void * query, size_t query_length,
       void ** result, size_t *result_length,
       int (*on_notification)(void*, size_t, void*),
-      void *arg,
+      void *arg, int *exit_after_signal,
       long source, long destination);
 
 
@@ -45,44 +45,46 @@ int double_queue_query(
 int double_queue_listen_err(
       double_queue_t *q,
       int (*server)(void *, size_t, void **, size_t *, int *, int, void*),
-      void *arg,
+      void *arg, int *exit_after_signal,
       int destination,
       int (*error_f)(void*), void *error_a);
 
 int double_queue_listen(
 			double_queue_t *q,
 			int (*server)(void*, size_t, void **, size_t*, int *, int, void*),
-      void *arg,
+      void *arg, int *exit_after_signal,
 			int destination);
 
 // Simple wait and signal procedures.
 int double_queue_wait_err(
       double_queue_t *q,
       long source, long destination, long queue,
+			int *exit_after_signal,
       int (*error_f)(void*), void *error_a);
 
 int double_queue_wait(
       double_queue_t *q,
-      long source, long destination, long queue);
+      long source, long destination, long queue,
+			int *exit_after_signal);
 
 
 int double_queue_signal_one_err(
       double_queue_t *q,
-      long queue,
+      long queue, int *exit_after_signal,
       int (*error_f)(void*), void *error_a);
 
 int double_queue_signal_one(
       double_queue_t *q,
-      long queue);
+      long queue, int *exit_after_signal);
 
 
 int double_queue_signal_all_err(
       double_queue_t *q,
-      long queue,
+      long queue, int *exit_after_signal,
       int (*error_f)(void*), void *error_a);
 
 int double_queue_signal_all(
       double_queue_t *q,
-      long queue);
+      long queue, int *exit_after_signal);
 
 #endif /* end of include guard: _ARCHEO_DOUBLE_QUEUE_H_ */

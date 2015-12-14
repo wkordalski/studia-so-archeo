@@ -1,0 +1,12 @@
+1. Zakładamy, że skończyła nam się pamięć i nie możemy alokować pamięci w procesie firmy.
+   Zgłaszamy błąd i się kończymy.
+   Jak poinformować bank i muzeum, że zakończyliśmy działanie,
+   skoro nie możemy zaalokować pamięci by na przykład wysłać komunikat o błędzie?
+   
+   Analogicznie ile programu wywalać w przypadku błędu?
+   (np. wywala się muzeum - jak bardzo powinien on zakończyć firmy)
+   
+2. Jak wygląda konkretnie operacja sprzedaży artefaktów
+   i czy istnieje kontrola posiadanych artefaktów firmy przez muzeum.
+
+3. Czy skoro Szacunek[x][y] == 0 to pole (x, y) jest wydobyte?

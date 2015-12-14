@@ -55,7 +55,7 @@ int double_queue_query_err(
       void * query, size_t query_length,
       void ** result, size_t *result_length,
       int (*on_notification)(void *, size_t, void *),
-      void *arg,
+      void *arg, int *exit_after_signal,
       long source, long destination,
       int (*error_f)(void*), void *error_a) {
   // Parameter checks
@@ -122,16 +122,16 @@ int double_queue_query(
       void * query, size_t query_length,
       void ** result, size_t *result_length,
       int (*on_notification)(void*, size_t, void*),
-      void *arg,
+      void *arg, int *exit_after_signal,
       long source, long destination) {
-  return double_queue_query_err(q, query, query_length, result, result_length, on_notification, arg, source, destination, simple_error, NULL);
+  return double_queue_query_err(q, query, query_length, result, result_length, on_notification, arg, exit_after_signal, source, destination, simple_error, NULL);
 }
 
 // Listen - receives query and sends result (server side)
 int double_queue_listen_err(
       double_queue_t *q,
       int (*server)(void *, size_t, void **, size_t *, int *, int, void*),
-      void *arg,
+      void *arg, int *exit_after_signal,
       int destination,
       int (*error_f)(void*), void *error_a) {
   // Prepare buffers
@@ -147,7 +147,6 @@ int double_queue_listen_err(
     free(query);
 		return error_f(error_a);
   }
-  print_hexadecimal(query, ret + sizeof(long));
   long source = 0;
   char do_wait = 0;
   ret -= (sizeof(long)+1);
@@ -226,9 +225,9 @@ int double_queue_listen_err(
 int double_queue_listen(
 			double_queue_t *q,
 			int (*server)(void*, size_t, void **, size_t*, int *, int, void*),
-      void *arg,
+      void *arg, int *exit_after_signal,
 			int destination) {
-	return double_queue_listen_err(q, server, arg, destination, simple_error, NULL);
+	return double_queue_listen_err(q, server, arg, exit_after_signal, destination, simple_error, NULL);
 }
 
 
@@ -236,6 +235,7 @@ int double_queue_listen(
 int double_queue_wait_err(
       double_queue_t *q,
       long source, long destination, long queue,
+			int *exit_after_signal,
       int (*error_f)(void*), void *error_a) {
   // Prepare query
   void * real_query;
@@ -277,14 +277,15 @@ int double_queue_wait_err(
 
 int double_queue_wait(
       double_queue_t *q,
-      long source, long destination, long queue) {
-  return double_queue_wait_err(q, source, destination, queue, simple_error, NULL);
+      long source, long destination, long queue,
+			int *exit_after_signal) {
+  return double_queue_wait_err(q, source, destination, queue, exit_after_signal, simple_error, NULL);
 }
 
 
 int double_queue_signal_one_err(
       double_queue_t *q,
-      long queue,
+      long queue, int *exit_after_signal,
       int (*error_f)(void*), void *error_a) {
   // get the queue
   if(q->conds_count == 0) {
@@ -320,14 +321,14 @@ int double_queue_signal_one_err(
 
 int double_queue_signal_one(
       double_queue_t *q,
-      long queue) {
-  return double_queue_signal_one_err(q, queue, simple_error, NULL);
+      long queue, int *exit_after_signal) {
+  return double_queue_signal_one_err(q, queue, exit_after_signal, simple_error, NULL);
 }
 
 
 int double_queue_signal_all_err(
       double_queue_t *q,
-      long queue,
+      long queue, int *exit_after_signal,
       int (*error_f)(void*), void *error_a) {
   // get the queue
   if(q->conds_count == 0) {
@@ -361,6 +362,6 @@ int double_queue_signal_all_err(
 
 int double_queue_signal_all(
       double_queue_t *q,
-      long queue) {
-  return double_queue_signal_all_err(q, queue, simple_error, NULL);
+      long queue, int *exit_after_signal) {
+  return double_queue_signal_all_err(q, queue, exit_after_signal, simple_error, NULL);
 }

@@ -9,75 +9,66 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-typedef struct {
-  int idx;
-  int id;
-  long ip;
-  long wrk_ip;
-  int do_exit;
-  double_queue_t bqueue;
-  double_queue_t mqueue;
-  double_queue_t *bQ;
-  double_queue_t *mQ;
-  double_queue_t *cQ;
-  int wrk_no;
-  pthread_t *workers;
-} company_t;
+int idx;                        // company index
+int id;                         // company identifier
+long ip;                        // company ip
+long wrk_ip;                    // worker base ip
+int do_exit;                    // when we can exit server
+double_queue_t bqueue;          // bank message queue
+double_queue_t mqueue;          // museum message queue
+double_queue_t cqueue;          // company message queue
+double_queue_t *bQ = &bqueue;
+double_queue_t *mQ = &mqueue;
+double_queue_t *cQ = &cqueue;
+int number_of_workers;          // number of workers
+pthread_t *workers;             // worker threads
 
-void cleanup_company(company_t *global) {
-  bold("Running cleanup of company %d.", global->idx);
-
-  free(global);
-  return;
+void cleanup() {
+  bold("Running cleanup.");
   // TODO
+  return;
 }
 
-int server_company(
+int server(
       void *query, size_t query_length,
       void **response, size_t *response_length,
       int * is_notification,
       int source) {
   // TODO
+	return -1;
 }
 
 // main function for company
-void* company(void *arg) {
-  company_t *global;
-  company_init_t *com_init = (company_init_t*)arg;
-
-  bold("Running company %d with id = %d.", com_init->idx, com_init->id);
-
-  if((global = malloc(sizeof(company_t))) == NULL) {
-    error("Allocation failed.");
-    return NULL;
-  }
-
-  global->do_exit = 0;
-  global->bQ = &(global->bqueue);
-  global->mQ = &(global->mqueue);
-  global->cQ = com_init->cQ;
-  global->idx = com_init->idx;
-  global->id = com_init->id;
-  global->ip = com_init->ip;
-  global->wrk_ip = com_init->wip;
-  global->wrk_no = com_init->k;
+int main(int argc, char *argv[]) {
+  // for first time we can use PID as IP
+  bold("Starting company...");
 
   log("Connecting to bank and museum...");
   {
-  	if(double_queue_init(global->mQ, museum_key1, museum_key2, 0700|IPC_CREAT, 0700|IPC_CREAT) == -1) {
+  	if(double_queue_init(mQ, museum_key1, museum_key2, 0700|IPC_CREAT, 0700|IPC_CREAT) == -1) {
   		error("Failed creating message queue.");
-  		cleanup_company(global);
-  		return NULL;
+  		cleanup();
+  		return 1;
   	}
-
-    if(double_queue_init(global->bQ, bank_key1, bank_key2, 0700|IPC_CREAT, 0700|IPC_CREAT) == -1) {
+    if(double_queue_init(bQ, bank_key1, bank_key2, 0700|IPC_CREAT, 0700|IPC_CREAT) == -1) {
   		error("Failed creating message queue.");
-  		cleanup_company(global);
-  		return NULL;
+  		cleanup();
+  		return 1;
+  	}
+  	if(double_queue_init(cQ, company_key1, company_key2, 0700|IPC_CREAT, 0700|IPC_CREAT) == -1) {
+  		error("Failed creating message queue.");
+  		cleanup();
+  		return 1;
   	}
   }
 
+  log("Getting initialization data from bank");
+	{
+		// TODO
+	}
+  
   log("Starting workers...");
+	/*
   {
     if((global->workers = malloc(global->wrk_no * sizeof(pthread_t))) == NULL) {
       error("Allocation failed.");
@@ -109,9 +100,10 @@ void* company(void *arg) {
     }
     pthread_attr_destroy(&attrs);
   }
-
+	*/
   // We assume we are honest so we do not have to check for saldo every time
   log("Asking for current saldo.");
+	/*
   long long int saldo;
   {
     void *query;
@@ -135,8 +127,9 @@ void* company(void *arg) {
     free(response);
   }
   log("We have %lld units of gold.", saldo);
-
+	*/
+	// TODO
   sleep(10);
-  cleanup_company(global);
+  cleanup();
   return 0;
 }

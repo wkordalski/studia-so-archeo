@@ -59,7 +59,7 @@ int wait_for_museum_connection(
     error("Wrong sender address (waiting from connection from museum).");
     return -1;
   }
-  if(match(query, query_length, "@c", ACT_BANK_WITH_MUSEUM_CONNECT_REQUEST) != 0) {
+  if(match(query, query_length, "@c", ACT_MUSEUM_WITH_BANK_CONNECT_REQUEST) != 0) {
     error("Expected BANK WITH MUSEUM CONNECT REQUEST message.");
     return -1;
   }
@@ -92,7 +92,7 @@ int server(
         return 0;
       }
     } else {
-      error("Wrong message.");
+      combine(response, response_length, "%c %c", ACT_ERROR, ERR_WRONG_MESSAGE);
       return -1;
     }
   }
@@ -141,7 +141,8 @@ int main(int argc, const char *argv[]) {
 
   bold("Waiting for museum connection request...");
   {
-    if(double_queue_listen(bQ, wait_for_museum_connection, NULL, bank_ip) == -1) {
+		int exit_on_signal = 0;
+    if(double_queue_listen(bQ, wait_for_museum_connection, NULL, &exit_on_signal, bank_ip) == -1) {
       error("Listening error during waiting for museum connection request.");
       cleanup();
       return 1;
@@ -161,37 +162,41 @@ int main(int argc, const char *argv[]) {
       cleanup();
       return 1;
     }
-    pthread_attr_t attrs;
-    pthread_attr_init(&attrs);
-    int worker_base = 3 + LiczbaFirm;
-    for(int i = 0; i < LiczbaFirm; i++) {
-      company_init_t *cidata = malloc(sizeof(company_init_t));
-      if(cidata == NULL) {
-        error("Allocation failed.");
-        pthread_attr_destroy(&attrs);
-        cleanup();
-        return 1;
-      }
-      scanf("%d %d %d", &(cidata->id), &(Konta[i].saldo), &(cidata->k));
-      Konta[i].id = cidata->id;
-      cidata->idx = i;
-      cidata->ip = 3 + i;
-      cidata->wip = worker_base;
-      worker_base += cidata->k;
-      // we can now start new thread
-      int ret = pthread_create(Firmy+i, &attrs, company, cidata);
-      if(ret != 0) {
-        error("Failed with creating thread.");
-        pthread_attr_destroy(&attrs);
-        cleanup();
-        return 1;
-      }
-    }
-    pthread_attr_destroy(&attrs);
+    // TODO: create processes
+//     pthread_attr_t attrs;
+//     pthread_attr_init(&attrs);
+//     int worker_base = company_base_ip + LiczbaFirm * 2;
+//     for(int i = 0; i < LiczbaFirm; i++) {
+//       company_init_t *cidata = malloc(sizeof(company_init_t));
+//       if(cidata == NULL) {
+//         error("Allocation failed.");
+//         pthread_attr_destroy(&attrs);
+//         cleanup();
+//         return 1;
+//       }
+//       scanf("%d %d %d", &(cidata->id), &(Konta[i].saldo), &(cidata->k));
+//       Konta[i].id = cidata->id;
+//       cidata->idx = i;
+//       cidata->ip = company_base_ip + i * 2;
+//       cidata->worker_waitroom = company_base_ip + i * 2 + 1;
+//       cidata->worker_base_ip = worker_base;
+//       worker_base += cidata->k;
+//       // we can now start new thread
+//       int ret = pthread_create(Firmy+i, &attrs, company, cidata);
+//       if(ret != 0) {
+//         error("Failed with creating thread.");
+//         pthread_attr_destroy(&attrs);
+//         cleanup();
+//         return 1;
+//       }
+//     }
+//     pthread_attr_destroy(&attrs);
   }
 
+  bold("Started listening...");
   while(!do_exit) {
-    if(double_queue_listen(bQ, server, NULL, bank_ip) == -1) {
+		int exit_on_signal = 0;
+    if(double_queue_listen(bQ, server, NULL, &exit_on_signal, bank_ip) == -1) {
       error("Error during listening for queries.");
       cleanup();
       return 1;

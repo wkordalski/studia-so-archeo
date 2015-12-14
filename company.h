@@ -7,8 +7,9 @@ typedef struct {
   int idx;
   int id;         // identyfikator firmy
   int k;          // liczba pracowników
-  int ip;         // ip firmy
-  int wip;        // bazowe ip workerów - będą oni mieli adresy: wip+0, wip+1, ..., wip+k-1
+  long ip;         // ip firmy
+  long worker_waitroom;
+  long worker_base_ip;        // bazowe ip workerów - będą oni mieli adresy: wip+0, wip+1, ..., wip+k-1
   double_queue_t *cQ;
 } company_init_t;
 

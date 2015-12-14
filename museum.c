@@ -38,6 +38,41 @@ void cleanup() {
   free(Kolekcje);
 }
 
+int server(
+      void *query, size_t query_length,
+      void **response, size_t *response_length,
+      int * is_notification,
+      int source, void *arg) {
+	if(query_length <= 0) {
+    error("Empty message - something went wrong.");
+    return -1;
+  }
+  char cmd = ((char*)query)[0];
+  if(cmd == ACT_MUSEUM_GET_ESTIMATIONS) {
+    int pL, pP, pT, pB;
+    if(match(query, query_length, "@c %i %i %i %i", ACT_MUSEUM_GET_ESTIMATIONS, &pL, &pP, &pT, &pB) == 0) {
+      if(!(1 <= pL && pL <= pP && pP <= Dlugosc && 1 <= pT && pT <= pB && pB <= Glebokosc)) {
+        combine(response, response_length, "%c %c", ACT_ERROR, ERR_INVALID_ARGUMENT);
+        return 0;
+      } else if((pP - pL + 1) * (pB - pT + 1) > 999) {
+        combine(response, response_length, "%c %c", ACT_ERROR, ERR_INVALID_ARGUMENT);
+        return 0;
+      } else {
+        // TODO
+        // calculate result
+				return 0;
+      }
+    } else {
+      combine(response, response_length, "%c %c", ACT_ERROR, ERR_WRONG_MESSAGE);
+      return 0;
+    }
+  }
+  else {
+    error("Unsupported command.");
+    return -1;
+  }
+}
+
 int main(int argc, const char *argv[]) {
   bold("Starting museum process.");
   if(argc != 5) {
@@ -135,10 +170,11 @@ int main(int argc, const char *argv[]) {
   {
 		void *query;
     size_t qlen;
-    combine(&query, &qlen, "%c", ACT_BANK_WITH_MUSEUM_CONNECT_REQUEST);
+    combine(&query, &qlen, "%c", ACT_MUSEUM_WITH_BANK_CONNECT_REQUEST);
 		char *response;
 		size_t response_size;
-		if(double_queue_query(bQ, query, qlen, (void**)(&response), &response_size, &skip_notifications, NULL, museum_ip, bank_ip) == -1) {
+		int exit_on_signal = 0;
+		if(double_queue_query(bQ, query, qlen, (void**)(&response), &response_size, &skip_notifications, NULL, &exit_on_signal, museum_ip, bank_ip) == -1) {
 			error("Error connecting to bank.");
       free(query);
 			cleanup();
