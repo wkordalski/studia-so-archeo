@@ -25,7 +25,7 @@ set(COMPANY_SOURCES
 )
 
 add_library(common STATIC ${COMMON_SOURCES})
-target_link_libraries(${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(common ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(museum ${MUSEUM_SOURCES})
 target_link_libraries(museum common ${CMAKE_THREAD_LIBS_INIT})

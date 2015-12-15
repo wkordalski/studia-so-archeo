@@ -81,7 +81,18 @@ int double_queue_query_err(
   memcpy(real_query + sizeof(long) + query_length, &source, sizeof(long));
   memcpy(real_query + sizeof(long) * 2 + query_length, &zero, 1);
   // Send query
+resend:
   if(msgsnd(q->id1, real_query, query_length + sizeof(long)+1 /* bez pola "rodzaj" */, 0 /* wait if full */) == -1) {
+    if(errno == EINTR) {
+      log("Interrupted during waiting...");
+      if(*exit_after_signal) {
+        free(real_query);
+        free(answer_buffer);
+        return -1;
+      } else {
+        goto resend;
+      }
+    }
     error("Message sending failed.");
     free(real_query);
     free(answer_buffer);
@@ -90,8 +101,19 @@ int double_queue_query_err(
   free(real_query);
   // Wait for result
   char is_notification = 0;
+  int ret;
   do {
-    int ret = msgrcv(q->id2, answer_buffer, 1024+1+sizeof(long) /* nie potrzebujemy adresu zwrotnego */, source, 0);
+  rerecv:
+    ret = msgrcv(q->id2, answer_buffer, 1024+1+sizeof(long) /* nie potrzebujemy adresu zwrotnego */, source, 0);
+    if(ret == -1 && errno == EINTR) {
+      log("Message receiving interrupted.");
+      if(*exit_after_signal) {
+        free(answer_buffer);
+        return -1;
+      } else {
+        goto rerecv;
+      }
+    }
     if(ret == -1 || ret == 0) {
       error("Message receiving failed.");
       free(answer_buffer);
@@ -141,7 +163,18 @@ int double_queue_listen_err(
     return error_f(error_a);
   }
   // Receive
-  int ret = msgrcv(q->id1, query, 1024+2*sizeof(long)+1, destination, 0);
+  int ret;
+rerecv:
+  ret = msgrcv(q->id1, query, 1024+2*sizeof(long)+1, destination, 0);
+  if(ret == -1 && errno == EINTR) {
+    log("Message receiving interrupted.");
+    if(*exit_after_signal) {
+      free(query);
+      return -1;
+    } else {
+      goto rerecv;
+    }
+  }
   if(ret == -1 || ret < sizeof(long)+1) {
     error("Message received failed.");
     free(query);
@@ -152,7 +185,7 @@ int double_queue_listen_err(
   ret -= (sizeof(long)+1);
   memcpy(&source, query + ret + sizeof(long), sizeof(long));
   memcpy(&do_wait, query + ret + 2* sizeof(long), 1);
-  if(do_wait) {
+  if(do_wait == 1) {
     long queue_no;
     if(match(query, ret, "%l", &queue_no) == -1) {
       error("Bad wait query.");
@@ -178,6 +211,34 @@ int double_queue_listen_err(
       q->conds_count++;
     } else {
       q->conds[idx].count++;
+    }
+  } else if (do_wait == 2) {
+    long queue_no;
+    if(match(query, ret, "%l", &queue_no) == -1) {
+      error("Bad wait query.");
+      free(query);
+      return error_f(error_a);
+    }
+    int idx = 0;
+    for(; idx < q->conds_count; idx++) {
+      if(q->conds[idx].id == queue_no) break;
+    }
+    if(idx >= q->conds_count) {
+      error("No such queue.");
+      free(query);
+      return error_f(error_a);
+    } else {
+      if(q->conds[idx].count > 0) {
+        q->conds[idx].count--;
+      } else {
+        // consume one emmitted message
+        char some_buffer[16];
+        if(msgrcv(q->id2, some_buffer, 16, 0, 0) == -1) {
+          error("Wait queue cleaning error.");
+          free(query);
+          return error_f(error_a);
+        }
+      }
     }
   } else {
   	int is_notification = 0;
@@ -207,12 +268,25 @@ int double_queue_listen_err(
   		memcpy(response_buffer, &source, sizeof(long));
   		memcpy(response_buffer + sizeof(long), response, response_length);
   		response_buffer[response_length + sizeof(long)] = (is_notification == 0?0:1);
+    resend:
   		if(msgsnd(q->id2, response_buffer, response_length + 1, 0) == -1) {
-  			error("Sending of data failed.");
-  			free(query);
-  			free(response);
-  			free(response_buffer);
-  			return error_f(error_a);
+        if(errno == EINTR) {
+          log("Message sending interrupted.");
+          if(*exit_after_signal) {
+            free(query);
+            free(response);
+            free(response_buffer);
+            return -1;
+          } else {
+            goto resend;
+          }
+        } else {
+          error("Sending of data failed.");
+          free(query);
+          free(response);
+          free(response_buffer);
+          return error_f(error_a);
+        }
   		}
   		free(response);
   		free(response_buffer);
@@ -251,19 +325,50 @@ int double_queue_wait_err(
     return error_f(error_a);
   }
   // Send query
+resend:
   if(msgsnd(q->id1, real_query, real_query_length - sizeof(long) /* bez pola "rodzaj" */, 0 /* wait if full */) == -1) {
-    error("Message sending failed.");
-    free(real_query);
-    free(answer_buffer);
-    return error_f(error_a);
+    if(errno == EINTR) {
+      if(*exit_after_signal) {
+        free(real_query);
+        free(answer_buffer);
+        return -1;
+      } else {
+        goto resend;
+      }
+    } else {
+      error("Message sending failed.");
+      free(real_query);
+      free(answer_buffer);
+      return error_f(error_a);
+    }
   }
   free(real_query);
   // Wait for result
-  int ret = msgrcv(q->id2, answer_buffer, 1024+1+sizeof(long) /* nie potrzebujemy adresu zwrotnego */, 0 /* signals do not have specified receiver */, 0);
+  int ret;
+rerecv:
+  ret = msgrcv(q->id2, answer_buffer, 1024+1+sizeof(long) /* nie potrzebujemy adresu zwrotnego */, 0 /* signals do not have specified receiver */, 0);
   if(ret == -1) {
-    error("Message receiving failed.");
-    free(answer_buffer);
-    return error_f(error_a);
+    if(errno == EINTR) {
+      if(*exit_after_signal) {
+        void *cancel_query;
+        size_t cancel_size;
+        combine(&cancel_query, &cancel_size, "%l %l %l %c", destination, queue, source, 2);
+        // hope for the best
+        if(msgsnd(q->id2, cancel_query, cancel_size - sizeof(long), 0) == -1) {
+          error("Waiting cancelation sending failed! - the queue won't work and would be unstable!");
+          free(answer_buffer);
+          return error_f(error_a);
+        }
+        free(answer_buffer);
+        return -1;
+      } else {
+        goto rerecv;
+      }
+    } else {
+      error("Message receiving failed.");
+      free(answer_buffer);
+      return error_f(error_a);
+    }
   } else if(ret == 0) {
     // OK - we have been signalled
     free(answer_buffer);
@@ -309,10 +414,20 @@ int double_queue_signal_one_err(
   void *msg;
   size_t msg_len;
   combine(&msg, &msg_len, "%l", 1);
+resend:
   if(msgsnd(q->id2, msg, msg_len - sizeof(long) /* bez pola "rodzaj" */, 0 /* wait if full */) == -1) {
-    error("Sending of message failed.");
-    free(msg);
-    return error_f(error_a);
+    if(errno == EINTR) {
+      if(*exit_after_signal) {
+        free(msg);
+        return -1;
+      } else {
+        goto resend;
+      }
+    } else {
+      error("Sending of message failed.");
+      free(msg);
+      return error_f(error_a);
+    }
   }
   q->conds[idx].count--;
   free(msg);
@@ -349,10 +464,20 @@ int double_queue_signal_all_err(
   combine(&msg, &msg_len, "%l", 0xffffffff /* fajna stała */);
 
   while(q->conds[idx].count > 0) {
+  resend:
     if(msgsnd(q->id2, msg, msg_len - sizeof(long) /* bez pola "rodzaj" */, 0 /* wait if full */) == -1) {
-      error("Sending of message failed.");
-      free(msg);
-      return error_f(error_a);
+      if(errno == EINTR) {
+        if(*exit_after_signal) {
+          free(msg);
+          return -1;
+        } else {
+          goto resend;
+        }
+      } else {
+        error("Sending of message failed.");
+        free(msg);
+        return error_f(error_a);
+      }
     }
     q->conds[idx].count--;
   }
