@@ -9,6 +9,8 @@ set(COMMON_SOURCES
   common.c
   double_queue.c
   util.c
+  
+  bank_utils.c
 )
 
 set(MUSEUM_SOURCES

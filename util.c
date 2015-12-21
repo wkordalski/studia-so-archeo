@@ -105,31 +105,6 @@ static int parse_format_command(char **format, char *type, char **argument, int 
   return -1;
 }
 
-static int count_args(char *s) {
-  int count = 0;
-  char delim = 0;
-
-  while(*s) {
-    // TODO
-    if(delim && *s == delim) {
-      delim = 0;
-    } else if(delim) {
-      // skip
-    } else {
-      if(*s == '$' || *s == '\'' || *s == '"') {
-        delim = *s;
-      } else if(*s == '%' || *s == '@') {
-        count++;
-      } else {
-        // skip
-      }
-    }
-    s++;
-  }
-
-  return count;
-}
-
 int match(void *buffer, size_t length, char *format, ...) {
   va_list ap;
   char *s = format;
