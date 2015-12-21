@@ -82,11 +82,14 @@ extern const char ACT_COMPANY_REGISTER;
 //
 // DELEGATE
 //
-// position (int) -> work (int)
+// worker (int) -> work (int)
 extern const char ACT_DELEGATE_GIVE_WORK;
 
-// position (int), results (int[32]) -> OK
+// position (int), symbol (int), results (int[32]) -> OK
 extern const char ACT_DELEGATE_CHECK_WORK;
+
+// () -> OK
+extern const char ACT_DELEGATE_FIRE;
 
 //
 // ERROR CODES...

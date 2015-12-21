@@ -25,12 +25,15 @@ static int UruchomioneFirmy;
 
 static pid_t bank_pid;
 
+static pthread_mutex_t ochrona;
+
 static int do_exit = 0;
 
 static int *Teren;
 static int *Szacunek;
 static int *Rezerwacje;
 static int *Wydobyte;
+static int *Uswiadomione;
 
 static int *Kolekcje;
 
@@ -45,6 +48,10 @@ static double_queue_t *bQ = &bqueue;
 
 void * delegate(void *arg);
 
+int terrain(int d, int g) {
+  return Teren[d * Glebokosc + g];
+}
+
 typedef struct {
   // data pf delegate
   int zajety;
@@ -53,6 +60,7 @@ typedef struct {
   int l;
   pthread_t thread;
   int do_exit;
+  int k;
 } delegate_t;
 
 static delegate_t *Delegaci;
@@ -65,22 +73,21 @@ void cleanup() {
   double_queue_close(bQ);
 
   log("Freeing memory.");
-  if(Teren)      free(Teren);
-  if(Szacunek)   free(Szacunek);
-  if(Rezerwacje) free(Rezerwacje);
-  if(Wydobyte)   free(Wydobyte);
-  if(Kolekcje)   free(Kolekcje);
+  if(Teren)        free(Teren);
+  if(Szacunek)     free(Szacunek);
+  if(Rezerwacje)   free(Rezerwacje);
+  if(Wydobyte)     free(Wydobyte);
+  if(Uswiadomione) free(Uswiadomione);
+  if(Kolekcje)     free(Kolekcje);
   if(Raporty) {
     for(int i = 0; i < LiczbaFirm; i++) {
       if(Raporty[i] != NULL) free(Raporty[i]);
     }
     free(Raporty);
   }
-  if(DlugosciRaportow) free(DlugosciRaportow);
+  if(DlugosciRaportow)        free(DlugosciRaportow);
   if(OczekiwnaDlugoscRaportu) free(OczekiwnaDlugoscRaportu);
-  if(Delegaci)
-    // TODO: some for
-    free(Delegaci);
+  if(Delegaci)                free(Delegaci);
 }
 
 static void panic() {
@@ -179,7 +186,7 @@ int server(
         int w = pP - pL + 1;
         for(int i = pL, ii = 0; i <= pP; i++, ii++) {
           for(int j = pT, jj = 0; j <= pB; j++, jj++) {
-            res[ii * w + jj] = ((Wydobyte[i] < j)?Szacunek[i*Dlugosc + j]:0);
+            res[ii * w + jj] = ((Wydobyte[i] < j)?Szacunek[i*Glebokosc + j]:0);
           }
         }
         combine(response, response_length, "%c %b", ACT_OK, res, (pP - pL + 1) * (pB - pT + 1) * sizeof(int));
@@ -197,63 +204,95 @@ int server(
     int k, z, idx, id;
     if(match(query, query_length, "@c %i %i %i %i", ACT_MUSEUM_BUY_TERRAIN, &idx, &id, &k, &z) == 0) {
       // Try to allocate and return result
+      if(z < OplataStala) {
+        combine(response, response_length, "%c", ACT_REJECT);
+        return 0;
+      }
       int ret = change_money_of_company(bQ, idx, id, -OplataStala, museum_ip);
       if(ret == 1 || z < OplataStala || Delegaci[idx].zajety != 0) {
-        combine(response, response_length, "%c", ACT_ERROR);
+        combine(response, response_length, "%c", ACT_REJECT);
         return 0;
       } else if(ret == -1) {
-        return -1;
+        combine(response, response_length, "%c", ACT_ERROR);
+        return 0;
       }
       z -= OplataStala;
+      pthread_mutex_lock(&ochrona);
       // find first such block of terrain
       int l = -1;
+      int g = 0;
       for(int i = 0; i < Dlugosc - k; i++) {
         l = i;
         for(int j = 0; j < k; j++) {
-          if(Rezerwacje[i+j] > Wydobyte[i+j]) {
+          if(Rezerwacje[i+j] > 0) {
             l = -1;
+            i = i + j;
             break;
           }
         }
-        if(l != -1) break;
-      }
-      int g = 0;
-      int sumcost = 0;
-      for(int i = 0; i < Glebokosc; i++) {
-        int line_cost = 0;
-        for(int j = 0; j < k; j++) {
-          if(Wydobyte[j+l] > i) continue;
-          line_cost += Szacunek[(j+l)*Dlugosc+i];
-          if(line_cost > z) {
-            line_cost = z + 1;
-            break;
+        if(l + k == Dlugosc) {
+          combine(response, response_length, "%c", ACT_REJECT);
+          pthread_mutex_unlock(&ochrona);
+          return 0;
+        }
+        if(l != -1) {
+          int sumcost = 0;
+          int ndw = 0;
+          for(int ii = 0; ii < Dlugosc; ii++) {
+            if(Wydobyte[l+ii] < Glebokosc) {
+              ndw = 1;
+              break;
+            }
+          }
+          if(ndw == 0) {
+            continue;
+          }
+          for(int i = 0; i < Glebokosc; i++) {
+            int line_cost = 0;
+            for(int j = 0; j < k; j++) {
+              if(Wydobyte[j+l] > i) continue;
+              line_cost += Szacunek[(j+l)*Glebokosc+i];
+              if(line_cost > z) {
+                line_cost = z + 1;
+                break;
+              }
+            }
+            if(line_cost == z + 1) break;
+            else if(line_cost + sumcost > z) break;
+            sumcost += line_cost;
+            g = i + 1;
+          }
+          if(g == 0 || sumcost > z) {
+            continue;
           }
         }
-        if(line_cost == z + 1) break;
-        else if(line_cost + sumcost > z) break;
-        sumcost += line_cost;
-        g = i;
-      }
-      if(g == 0 || sumcost > z) {
-        combine(response, response_length, "%c", ACT_ERROR);
-        return 0;
       }
       int ret2 = change_money_of_company(bQ, idx, id, -z, museum_ip);
       if(ret2 == 1) {
-        combine(response, response_length, "%c", ACT_ERROR);
+        combine(response, response_length, "%c", ACT_REJECT);
+        pthread_mutex_unlock(&ochrona);
         return 0;
       } else if(ret2 == -1) {
-        return -1;
+        combine(response, response_length, "%c", ACT_ERROR);
+        pthread_mutex_unlock(&ochrona);
+        return 0;
       }
+      for(int i = 0; i < k; i++) {
+        Rezerwacje[i+l] = g;
+        Uswiadomione[i+l] = 0;
+      }
+      pthread_mutex_unlock(&ochrona);
       // OK - create delegate
       Delegaci[idx].zajety = 1;
       Delegaci[idx].ip = delegate_base_ip + idx;
       Delegaci[idx].l = l;
       Delegaci[idx].g = g;
       Delegaci[idx].do_exit = 0;
+      Delegaci[idx].k = k;
       
       pthread_attr_t attrs;
       pthread_attr_init(&attrs);
+      pthread_attr_setdetachstate(&attrs, PTHREAD_CREATE_DETACHED);
       
       int ret3 = pthread_create(&(Delegaci[idx].thread), &attrs, delegate, Delegaci+idx);
       if(ret3 != 0) {
@@ -265,7 +304,7 @@ int server(
       combine(response, response_length, "%c %i %i %l", ACT_OK, l, g, delegate_base_ip + idx);
       return 0;
     } else {
-      combine(response, response_length, "%c %c", ACT_ERROR, ERR_WRONG_MESSAGE);
+      combine(response, response_length, "%c", ACT_ERROR);
       return 0;
     }
   } else if(cmd == ACT_MUSEUM_REPORT_INIT || cmd == ACT_MUSEUM_SEND_REPORT_PART
@@ -276,7 +315,7 @@ int server(
       return -1;
   } else {
     warning("Unsupported command 0x%x.", cmd);
-    combine(response, response_length, "%c %c", ACT_ERROR, ERR_WRONG_MESSAGE);
+    combine(response, response_length, "%c", ACT_ERROR);
     return 0;
   }
   assert(0);
@@ -555,18 +594,65 @@ int delegate_server(
   delegate_t *data = (delegate_t*)arg;
   char cmd = ((char*)query)[0];
   if(cmd == ACT_DELEGATE_GIVE_WORK) {
-    // match
-    // check if such part is not used and available
-    // send symbol
+    int wrkno;
+    if(match(query, query_length, "@c %i", ACT_DELEGATE_GIVE_WORK, &wrkno) == 0) {
+      if(Wydobyte[wrkno + data->l] == Rezerwacje[wrkno + data->l]) {
+        combine(response, response_length, "%c", ACT_REJECT);
+        Uswiadomione[wrkno+data->l] = 1;
+        return 0;
+      } else {
+        combine(response, response_length, "%c %i", ACT_OK, terrain(wrkno+data->l, Wydobyte[wrkno+data->l]));
+        return 0;
+      }
+    } else {
+      combine(response, response_length, "%c", ACT_ERROR);
+      return 0;
+    }
   } else if(cmd == ACT_DELEGATE_CHECK_WORK) {
-    // match
-    // check if result | symbol
-    // increment Wydobyte
-    // if everything is Wydobyte, then do_exit = true
-    // send OK
+    int wrkno;
+    int sym;
+    int results[32];
+    if(match(query, query_length, "@c %i %i %b", ACT_DELEGATE_CHECK_WORK, &wrkno, &sym, results, 32 * sizeof(int)) == 0) {
+      long long int mul = results[0], ter = terrain(wrkno+data->l, Wydobyte[wrkno+data->l]);
+      for(int i = 1; i < 32; i++) mul *= results[i];
+      if(mul > ter || sym != ter || ter % mul != 0) {
+        combine(response, response_length, "%c", ACT_ERROR);
+        return 0;
+      } else {
+        pthread_mutex_lock(&ochrona);
+        Wydobyte[wrkno+data->l]++;
+        if(Wydobyte[wrkno+data->l] == data->g) {
+          int flag = 1;
+          for(int i = 0; i < data->k; i++) {
+            if(Wydobyte[data->l + i] < data->g || Uswiadomione[data->l + i] == 0) {
+              flag = 0; break;
+            }
+          }
+          if(flag) {
+            data->do_exit = 1;
+            for(int i = 0; i < data->k; i++) {
+              Rezerwacje[data->l + i] = 0;
+            }
+          }
+        }
+        pthread_mutex_unlock(&ochrona);
+        combine(response, response_length, "%c", ACT_OK);
+        return 0;
+      }
+    } else {
+      combine(response, response_length, "%c", ACT_ERROR);
+      return 0;
+    }
+  } else if(cmd == ACT_DELEGATE_FIRE) {
+    pthread_mutex_lock(&ochrona);
+    data->do_exit = 1;
+    for(int i = 0; i < data->k; i++) {
+      Rezerwacje[data->l + i] = 0;
+    }
+    pthread_mutex_unlock(&ochrona);
   } else {
     warning("Unsupported command 0x%x.", cmd);
-    combine(response, response_length, "%c %c", ACT_ERROR, ERR_WRONG_MESSAGE);
+    combine(response, response_length, "%c", ACT_ERROR);
     return 0;
   }
   return -1;
@@ -584,5 +670,6 @@ void * delegate(void *arg) {
       panic();
     }
   }
+  data->zajety = 0;
   return NULL;
 }

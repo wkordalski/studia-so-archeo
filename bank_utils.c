@@ -5,7 +5,7 @@
 
 #include <stdlib.h>
 
-long long int get_money_of_company(double_queue_t *q, int id, int idx, long source) {
+long long int get_money_of_company(double_queue_t *q, int idx, int id, long source) {
   void *query, *response;
   size_t qlen, response_size;
   int exit_on_signal = 0;
@@ -26,7 +26,7 @@ long long int get_money_of_company(double_queue_t *q, int id, int idx, long sour
   return saldo;
 }
 
-int change_money_of_company(double_queue_t *q, int id, int idx, long long int delta, long source) {
+int change_money_of_company(double_queue_t *q, int idx, int id, long long int delta, long source) {
   void *query, *response;
   size_t qlen, response_size;
   int exit_on_signal = 0;
